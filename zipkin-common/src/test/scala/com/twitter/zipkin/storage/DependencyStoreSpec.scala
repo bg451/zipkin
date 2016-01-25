@@ -103,28 +103,25 @@ abstract class DependencyStoreSpec extends JUnitSuite with Matchers {
     val two = Endpoint(127 << 24 | 2, 9410, "trace-producer-two")
     val three = Endpoint(127 << 24 | 3, 9410, "trace-producer-three")
 
-    val trace = List(
-      Span(10L, "get", 10L, None, Some(1445136539256150L), Some(1152579L), List(
-        Annotation(1445136539256150L, Constants.ServerRecv, Some(one)),
-        Annotation(1445136540408729L, Constants.ServerSend, Some(one)))),
-      Span(10L, "get", 20L, Some(10L), Some(1445136539764798L), Some(639337L), List(
-        Annotation(1445136539764798L, Constants.ClientSend, Some(one.copy(port = 3001))),
-        Annotation(1445136539816432L, Constants.ServerRecv, Some(two)),
-        Annotation(1445136540401414L, Constants.ServerSend, Some(two)),
-        Annotation(1445136540404135L, Constants.ClientRecv, Some(one.copy(port = 3001))))),
-      Span(10L, "query", 30L, Some(20L), Some(1445136540025751L), Some(371298L), List(
-        Annotation(1445136540025751L, Constants.ClientSend, Some(two.copy(port = 3002))),
-        Annotation(1445136540072846L, Constants.ServerRecv, Some(three)),
-        Annotation(1445136540394644L, Constants.ServerSend, Some(three)),
-        Annotation(1445136540397049L, Constants.ClientRecv, Some(two.copy(port = 3002)))))
-    )
+    val trace = ApplyTimestampAndDuration(List(
+      Span(10L, "get", 10L, annotations = List(
+        Annotation(today * 1000, Constants.ServerRecv, Some(one)),
+        Annotation((today + 350) * 1000, Constants.ServerSend, Some(one)))),
+      Span(10L, "get", 20L, Some(10L), annotations = List(
+        Annotation((today + 50) * 1000, Constants.ClientSend, Some(one.copy(port = 3001))),
+        Annotation((today + 100) * 1000, Constants.ServerRecv, Some(two)),
+        Annotation((today + 250) * 1000, Constants.ServerSend, Some(two)),
+        Annotation((today + 300) * 1000, Constants.ClientRecv, Some(one.copy(port = 3001))))),
+      Span(10L, "query", 30L, Some(20L), annotations = List(
+        Annotation((today + 150) * 1000, Constants.ClientSend, Some(two.copy(port = 3002))),
+        Annotation((today + 155) * 1000, Constants.ServerRecv, Some(three)),
+        Annotation((today + 200) * 1000, Constants.ServerSend, Some(three)),
+        Annotation((today + 225) * 1000, Constants.ClientRecv, Some(two.copy(port = 3002)))))
+    ))
     processDependencies(trace)
 
     val traceDuration = Trace.duration(trace).get
-    result(store.getDependencies(
-      (trace(0).timestamp.get + traceDuration) / 1000,
-      Some(traceDuration / 1000)
-    )).sortBy(_.parent) should be(
+    result(store.getDependencies(today + 1000)).sortBy(_.parent) should be(
       List(
         new DependencyLink("trace-producer-one", "trace-producer-two", 1),
         new DependencyLink("trace-producer-two", "trace-producer-three", 1)
